@@ -60,14 +60,14 @@ fn setup(
             position_type: PositionType::Absolute,
             position: UiRect {
                 top: Val::Px(3.),
-                left: Val::Px(7.),
+                left: Val::Px(6.),
                 ..default()
             },
             ..default()
         },
         text: Text {
             sections: vec![TextSection {
-                value: "Press SPACE to roll dice".to_string(),
+                value: "Click anywhere to roll dice".to_string(),
                 style: TextStyle {
                     font: asset_server.load("fonts/JetBrainsMono-Regular.ttf"),
                     font_size: 24.0,
@@ -85,7 +85,7 @@ fn setup(
                 position_type: PositionType::Absolute,
                 position: UiRect {
                     top: Val::Px(30.),
-                    left: Val::Px(7.),
+                    left: Val::Px(6.),
                     ..default()
                 },
                 ..default()
@@ -196,7 +196,7 @@ fn update_text(mut text: Query<&mut Text, With<DiceText>>, dice: Query<&Die>) {
 
 fn throw_dice(
     mut commands: Commands,
-    keyboard_input: Res<Input<KeyCode>>,
+    buttons: Res<Input<MouseButton>>,
     asset_handles: Res<AssetHandles>,
     query: Query<Entity, With<Die>>,
 ) {
@@ -211,13 +211,13 @@ fn throw_dice(
         Vec3::new(12.0, 4.0, -1.0),
     ];
 
-    if keyboard_input.just_released(KeyCode::Space) {
+    if buttons.just_released(MouseButton::Left) {
         for ent in query.iter() {
             commands.entity(ent).despawn_recursive();
         }
 
         for trans in dice.iter() {
-            let impulse = Vec3::new(rng.gen_range(-12.0..=-8.0), rng.gen_range(0.0..=2.0), 0.0);
+            let impulse = Vec3::new(rng.gen_range(-12.0..=-8.0), rng.gen_range(1.0..=3.0), 0.0);
 
             let torque_impulse = Vec3::new(
                 rng.gen_range(-2.0..=2.0),
