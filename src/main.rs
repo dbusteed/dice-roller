@@ -2,8 +2,32 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use rand::Rng;
 
+// for detecting when velocity is "zero"
+const VEC_EPSILON: f32 = 0.01;
+
+// normals of the 3D model
+const NORMALS: [Vec3; 6] = [
+    Vec3::X,     // 1
+    Vec3::NEG_Y, // 2
+    Vec3::Z,     // 3
+    Vec3::NEG_Z, // 4
+    Vec3::Y,     // 5
+    Vec3::NEG_X, // 6
+];
+
 #[derive(Component)]
-struct Die;
+struct Die {
+    value: Option<usize>,
+}
+
+impl Default for Die {
+    fn default() -> Self {
+        Die { value: None }
+    }
+}
+
+#[derive(Component)]
+struct DiceText;
 
 struct AssetHandles {
     die: Handle<Scene>,
@@ -16,6 +40,8 @@ fn main() {
         // .add_plugin(RapierDebugRenderPlugin::default())
         .add_startup_system(setup)
         .add_system(throw_dice)
+        .add_system(find_rolled_value)
+        .add_system(update_text)
         .run();
 }
 
@@ -25,17 +51,16 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-    let asset_handles = AssetHandles {
+    commands.insert_resource(AssetHandles {
         die: asset_server.load("die.glb#Scene0"),
-    };
-    commands.insert_resource(asset_handles);
+    });
 
     commands.spawn_bundle(TextBundle {
         style: Style {
             position_type: PositionType::Absolute,
             position: UiRect {
                 top: Val::Px(3.),
-                left: Val::Px(5.),
+                left: Val::Px(7.),
                 ..default()
             },
             ..default()
@@ -53,6 +78,32 @@ fn setup(
         },
         ..default()
     });
+
+    commands
+        .spawn_bundle(TextBundle {
+            style: Style {
+                position_type: PositionType::Absolute,
+                position: UiRect {
+                    top: Val::Px(30.),
+                    left: Val::Px(7.),
+                    ..default()
+                },
+                ..default()
+            },
+            text: Text {
+                sections: vec![TextSection {
+                    value: "? + ? + ? + ? + ? = ?".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/JetBrainsMono-Regular.ttf"),
+                        font_size: 24.0,
+                        color: Color::WHITE,
+                    },
+                }],
+                ..default()
+            },
+            ..default()
+        })
+        .insert(DiceText);
 
     commands
         .spawn_bundle(PbrBundle {
@@ -128,6 +179,21 @@ fn setup(
     });
 }
 
+fn update_text(mut text: Query<&mut Text, With<DiceText>>, dice: Query<&Die>) {
+    let mut t = text.get_single_mut().unwrap();
+    let values = dice
+        .iter()
+        .map(|die| {
+            if let Some(val) = die.value {
+                val.to_string()
+            } else {
+                "?".to_string()
+            }
+        })
+        .collect::<Vec<String>>();
+    t.sections[0].value = values.join(" ");
+}
+
 fn throw_dice(
     mut commands: Commands,
     keyboard_input: Res<Input<KeyCode>>,
@@ -136,6 +202,7 @@ fn throw_dice(
 ) {
     let mut rng = rand::thread_rng();
 
+    // spawn positions
     let dice = vec![
         Vec3::new(10.0, 4.0, 0.0),
         Vec3::new(10.0, 4.0, 1.0),
@@ -169,12 +236,32 @@ fn throw_dice(
                     ..default()
                 })
                 .insert(RigidBody::Dynamic)
+                .insert(Velocity::default())
                 .insert(Collider::cuboid(1.0, 1.0, 1.0))
                 .insert(ExternalImpulse {
                     impulse,
                     torque_impulse,
                 })
-                .insert(Die);
+                .insert(Die::default());
+        }
+    }
+}
+
+fn find_rolled_value(mut query: Query<(&Transform, &Velocity, &mut Die), With<Die>>) {
+    for (trans, vel, mut die) in query.iter_mut() {
+        if vel.linvel.abs().max_element() < VEC_EPSILON {
+            let mut rolled_num: usize = 1;
+            let mut max_distance: f32 = -10.0;
+
+            for (i, dir) in NORMALS.iter().enumerate() {
+                let val = trans.rotation.mul_vec3(*dir).y;
+                if val > max_distance {
+                    rolled_num = i + 1;
+                    max_distance = val;
+                }
+            }
+
+            die.value = Some(rolled_num);
         }
     }
 }
